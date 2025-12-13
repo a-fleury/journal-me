@@ -1,14 +1,18 @@
 package com.journalme
 package domain.model
 
-import java.util.{Date, UUID}
+import io.circe.Codec
+import sttp.tapir.Schema
+
+import java.util.UUID
+import java.time.Instant
 
 final case class JournalEvent(
   id: UUID,
   title: String,
-  description: Option[String],
-  date: Date,
-  startedAt: Option[Date],
-  endedAt: Option[Date],
+  description: String,
+  date: Instant,
+  startedAt: Instant,
+  endedAt: Instant,
   user: User
-)
+) derives Codec, Schema

@@ -1,6 +1,9 @@
 package com.journalme
 package domain.model
 
-enum Genre {
+import io.circe.Codec
+import sttp.tapir.Schema
+
+enum Genre derives Codec, Schema {
     case Male, Female, Other
 }

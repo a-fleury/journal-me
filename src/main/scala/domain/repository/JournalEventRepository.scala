@@ -3,10 +3,11 @@ package domain.repository
 
 import domain.model.JournalEvent
 
-import java.util.{Date, UUID}
+import java.util.UUID
+import java.time.Instant
 
-trait EventRepository {
+trait JournalEventRepository {
   def save(event: JournalEvent): JournalEvent
   def findAllLastMonth(userId : UUID): List[JournalEvent]
-  def findAllWithinDates(userId : UUID, startDate: Date, endDate: Date): List[JournalEvent]
+  def findAllWithinDates(userId : UUID, startDate: Instant, endDate: Instant): List[JournalEvent]
 }

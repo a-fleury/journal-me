@@ -1,21 +1,14 @@
 package com.journalme
-package domain.model
+package mcp.schema
 
+import domain.model.Genre
 import io.circe.Codec
 import sttp.tapir.Schema
 
-import java.util.UUID
-
-
-final case class User(
-  id: UUID,
+case class RegisterRequest(
   firstName: String,
   lastName: String,
   email: String,
+  password: String,
   genre: Genre
 ) derives Codec, Schema
-
-
-
-
-

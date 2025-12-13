@@ -1,12 +1,16 @@
 package com.journalme
 package domain.model
 
-import java.util.{Date, UUID}
+import io.circe.Codec
+import sttp.tapir.Schema
+
+import java.util.UUID
+import java.time.Instant
 
 final case class Session(
   id: UUID,
   token: String,
-  startsAt: Date,
-  endsAt: Date,
+  startsAt: Instant,
+  endsAt: Instant,
   user: User
-)
+) derives Codec, Schema

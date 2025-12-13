@@ -1,0 +1,9 @@
+package com.journalme
+package domain.error
+
+sealed trait JournalEventError
+case object InvalidStartDate extends JournalEventError
+case object InvalidEndDate extends JournalEventError
+case object InvalidDateInterval extends JournalEventError
+case object NoJournalEventsFound extends JournalEventError
+case object InvalidUserId extends JournalEventError
