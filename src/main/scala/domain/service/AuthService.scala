@@ -73,7 +73,7 @@ class AuthService(
     }
 
 
-  private def logout(authenticated: Authenticated): IO[Either[UserError, Session]] =
+  def logout(authenticated: Authenticated): IO[Either[UserError, Session]] =
     sessionService.end(authenticated.token).map {
       case Left(err) => Left(LogoutError(err))
       case Right(s)  => Right(s)

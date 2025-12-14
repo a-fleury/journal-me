@@ -2,6 +2,7 @@ package com.journalme
 package persistence.doobie.repository
 
 import domain.model.Credentials
+import persistence.doobie.Database
 import persistence.doobie.mapper.CredentialsMapper
 import persistence.doobie.model.DbCredentials
 import persistence.repository.CredentialsRepository
@@ -52,4 +53,9 @@ final class DoobieCredentialsRepository private (
     
   }
   
+}
+
+object DoobieCredentialsRepository {
+  def resource: Resource[IO, DoobieCredentialsRepository] =
+    Database.transactor.map(new DoobieCredentialsRepository(_))
 }

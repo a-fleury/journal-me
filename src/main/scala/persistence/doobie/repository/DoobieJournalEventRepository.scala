@@ -26,7 +26,7 @@ final class DoobieJournalEventRepository private (
     fr"""
       SELECT
         e.id, e.title, e.description, e.date, e.started_at, e.ended_at, e.user_id,
-        u.id, u.email
+        u.id, u.first_name, u.last_name, u.email, u.genre
       FROM journal_events e
       JOIN users u ON u.id = e.user_id
     """
@@ -34,10 +34,25 @@ final class DoobieJournalEventRepository private (
   // ---------- Commands ----------
 
   override def save(event: JournalEvent): IO[JournalEvent] = {
+    for {
+      _ <- insert(event)
+      saved <- findById(event.id)
+    } yield saved
+  }
+
+  private def findById(id: UUID): IO[JournalEvent] =
+    (selectWithUser ++ fr"WHERE e.id = $id")
+      .query[(DbJournalEvent, DbUser)]
+      .map(JournalEventMapper.toDomain)
+      .unique
+      .transact(xa)
+
+
+  private def insert(event: JournalEvent): IO[Unit] = {
     val dbEvent = JournalEventMapper.toDb(event)
 
     sql"""
-      INSERT INTO journal_event
+      INSERT INTO journal_events
         (id, title, description, date, started_at, ended_at, user_id)
       VALUES
         (${dbEvent.id}, ${dbEvent.title}, ${dbEvent.description},
@@ -47,7 +62,7 @@ final class DoobieJournalEventRepository private (
       .update
       .run
       .transact(xa)
-      .as(event) // 👈 return the domain object after the effect
+      .void // 👈 return the domain object after the effect
   }
 
   // ---------- Queries ----------

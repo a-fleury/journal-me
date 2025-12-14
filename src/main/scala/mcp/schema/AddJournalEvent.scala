@@ -9,6 +9,6 @@ case class AddJournalEvent(
   title: String,
   description: String,
   date: Instant,
-  startedAt: Option[Instant],
-  endedAt: Option[Instant]
+  startedAt: Instant,
+  endedAt: Instant
 ) derives Codec, Schema

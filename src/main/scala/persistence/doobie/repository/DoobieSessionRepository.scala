@@ -6,11 +6,13 @@ import persistence.doobie.Database
 import persistence.doobie.mapper.{JournalEventMapper, SessionMapper}
 import persistence.doobie.model.*
 import persistence.repository.SessionRepository
-
 import cats.effect.{IO, Resource}
 import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
+
+import java.time.Instant
+import java.util.UUID
 
 final class DoobieSessionRepository private (
   xa: Transactor[IO]
@@ -19,7 +21,8 @@ final class DoobieSessionRepository private (
   private val selectWithUser =
     fr"""
         SELECT 
-        s.id, s.token, s.starts_at, s.ends_at, s.user_id
+        s.id, s.token, s.starts_at, s.ends_at, s.user_id,
+        u.id, u.first_name, u.last_name, u.email, u.genre
         FROM sessions s 
         JOIN users u ON u.id = s.user_id
         """
@@ -42,6 +45,51 @@ final class DoobieSessionRepository private (
       .transact(xa)
       .as(session)
   }
+
+  override def refresh(session: Session): IO[Session] = {
+    val dbSession = SessionMapper.toDb(session)
+    for {
+      _ <-
+        sql"""
+        UPDATE sessions
+        SET ends_at = ${dbSession.ends_at}
+        WHERE token = ${dbSession.token}
+      """.update.run.transact(xa)
+
+      refreshed <- findActiveByToken(session.token)
+    } yield refreshed.getOrElse(
+      throw new IllegalStateException(s"Session with token ${session.token} vanished during refresh")
+    )
+  }
+  
+  override def end(session: Session): IO[Session] = {
+    val dbSession = SessionMapper.toDb(session)
+    for {
+      _ <-
+        sql"""
+        UPDATE sessions
+        SET ends_at = ${dbSession.ends_at}
+        WHERE id = ${dbSession.id}
+      """.update.run.transact(xa)
+
+      ended <- findById(session.id)
+    } yield ended.getOrElse(
+      throw new IllegalStateException(s"Error deleting session with id ${session.id}: session not found")
+    )
+  }
+  
+  def findById(id: UUID): IO[Option[Session]] = {
+    (selectWithUser ++
+      fr"""
+          WHERE s.id = $id
+          """
+      )
+      .query[(DbSession, DbUser)]
+      .option
+      .map(_.map(SessionMapper.toDomain))
+      .transact(xa)
+  }
+
 
   override def findActiveByToken(token: String): IO[Option[Session]] = {
     (selectWithUser ++

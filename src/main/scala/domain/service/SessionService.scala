@@ -44,7 +44,7 @@ class SessionService(
                 endsAt = Instant.ofEpochMilli(now.toEpochMilli + length * 1000)
               )
 
-            sessionRepo.save(refreshed).map(Right(_))
+            sessionRepo.refresh(refreshed).map(Right(_))
         }
     }
 
@@ -56,7 +56,7 @@ class SessionService(
         val now = Instant.now()
         val ended = session.copy(endsAt = now)
 
-        sessionRepo.save(ended).map(Right(_))
+        sessionRepo.end(ended).map(Right(_))
     }
 
   private def generateToken(): String =

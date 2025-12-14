@@ -4,7 +4,7 @@ package domain.service
 import domain.error.*
 import domain.model.{JournalEvent, User}
 import mcp.schema.AddJournalEvent
-import persistence.repository.{JournalEventRepository, UserRepository}
+import persistence.repository.JournalEventRepository
 
 import java.time.Instant
 import java.util.UUID
@@ -12,7 +12,7 @@ import cats.effect.IO
 
 class JournalEventService(
   journalEventRepo : JournalEventRepository,
-  userRepo : UserRepository
+  userService: UserService
 ) {
   def getAllLastMonth(userId: UUID): IO[Either[JournalEventError, List[JournalEvent]]] = {
     journalEventRepo
@@ -49,11 +49,11 @@ class JournalEventService(
         IO.pure(Left(err))
 
       case Right(_) =>
-        userRepo.findById(userId).flatMap {
-          case None =>
-            IO.pure(Left(InvalidUserId))
+        userService.getById(userId).flatMap {
+          case Left(_) =>
+            IO.pure(Left(InvalidUserId)) // possible upgrade : map UserError → JournalEventError
 
-          case Some(user) =>
+          case Right(user) =>
             val event = buildJournalEvent(request, user)
             journalEventRepo
               .save(event)
@@ -63,17 +63,14 @@ class JournalEventService(
   }
 
   private def buildJournalEvent(request: AddJournalEvent, user: User): JournalEvent =
-    val now = Instant.now()
-    val startedAt = request.startedAt.getOrElse(now)
-    val endedAt = request.endedAt.getOrElse(now)
     val eventId = UUID.randomUUID
     JournalEvent(
       eventId,
       request.title,
       request.description,
-      now,
-      startedAt,
-      endedAt,
+      request.date,
+      request.startedAt,
+      request.endedAt,
       user
     )
 
@@ -87,14 +84,12 @@ class JournalEventService(
     request: AddJournalEvent,
     now: Instant
   ): Either[JournalEventError, Unit] =
-    if (request.startedAt.exists(_.isAfter(now)))
+    if (request.startedAt.isAfter(now))
       Left(InvalidStartDate)
-    else if (request.endedAt.exists(_.isAfter(now)))
+    else if (request.endedAt.isAfter(now))
       Left(InvalidEndDate)
     else if (
-      request.startedAt.isDefined &&
-        request.endedAt.isDefined &&
-        request.startedAt.get.isAfter(request.endedAt.get)
+        request.startedAt.isAfter(request.endedAt)
     )
       Left(InvalidDateInterval)
     else
