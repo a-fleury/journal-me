@@ -1,26 +1,29 @@
 package com.journalme
 package domain.service
 
-import domain.error.{ UserError, UserNotFound}
+import cats.effect.IO
+import domain.error.{UserError, UserNotFound}
 import domain.model.User
-import domain.repository.UserRepository
+import persistence.repository.UserRepository
 
 import java.util.UUID
-import scala.Right
 
 class UserService(
-  userRepo : UserRepository
+  userRepo: UserRepository
 ) {
-  def create(user: User): Either[UserError, User] =
-    Right(userRepo.save(user))
 
+  def create(user: User): IO[Either[UserError, User]] =
+    userRepo.save(user).map(Right(_))
 
-  def getById(id: UUID): Either[UserError, User] = {
-    userRepo.findById(id).toRight(UserNotFound)
-  }
-  
-  def getByEmail(email: String): Either[UserError, User] = {
-    userRepo.findByEmail(email).toRight(UserNotFound)
-  }
+  def getById(id: UUID): IO[Either[UserError, User]] =
+    userRepo.findById(id).map {
+      case Some(user) => Right(user)
+      case None       => Left(UserNotFound)
+    }
 
+  def getByEmail(email: String): IO[Either[UserError, User]] =
+    userRepo.findByEmail(email).map {
+      case Some(user) => Right(user)
+      case None       => Left(UserNotFound)
+    }
 }

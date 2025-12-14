@@ -1,12 +1,13 @@
 package com.journalme
 package domain.service
 
-import domain.error.{InvalidCredentials, LogoutError, SessionCreationError, UserAlreadyExists, UserError}
+import domain.error.*
 import domain.model.{Credentials, PasswordHasher, Session, User}
-import domain.repository.CredentialsRepository
 import mcp.schema.{Authenticated, LoginRequest, LoginResponse, RegisterRequest}
+import persistence.repository.CredentialsRepository
 
 import java.util.UUID
+import cats.effect.IO
 
 class AuthService(
   credentialsRepo: CredentialsRepository,
@@ -14,45 +15,70 @@ class AuthService(
   sessionService: SessionService
 ) {
 
-  def login(request: LoginRequest): Either[UserError, LoginResponse] = {
-    for {
-      user <- userService.getByEmail(request.email)
-      credentials <- credentialsRepo.findByUserId(user.id).toRight(InvalidCredentials)
-      _ <- verifyPassword(request.password, credentials.passwordHash)
-      session <- sessionService.create(user: User).left.map(SessionCreationError.apply)
+  def login(request: LoginRequest): IO[Either[UserError, LoginResponse]] =
+    userService.getByEmail(request.email).flatMap {
+      case Left(err) => IO.pure(Left(err))
+
+      case Right(user) =>
+        credentialsRepo.findByUserId(user.id).flatMap {
+          case None => IO.pure(Left(InvalidCredentials))
+
+          case Some(credentials) =>
+            verifyPassword(request.password, credentials.passwordHash) match {
+              case Left(err) => IO.pure(Left(err))
+
+              case Right(_) =>
+                sessionService.create(user).map {
+                  case Left(err) => Left(SessionCreationError(err))
+                  case Right(session) =>
+                    Right(
+                      LoginResponse(
+                        user = user,
+                        session = session
+                      )
+                    )
+                }
+            }
+        }
     }
-      yield LoginResponse(
-        user = user,
-        session = session
-      )
-  }
 
-  def register(request: RegisterRequest): Either[UserError, User] =
-    for {
-      _ <- ensureEmailAvailable(request.email)
 
-      user = User(
-        id = UUID.randomUUID,
-        firstName = request.firstName,
-        lastName = request.lastName,
-        email = request.email,
-        genre = request.genre
-      )
+  def register(request: RegisterRequest): IO[Either[UserError, User]] =
+    ensureEmailAvailable(request.email).flatMap {
+      case Left(err) => IO.pure(Left(err))
 
-      passwordHash = PasswordHasher.hash(request.password)
+      case Right(_) =>
+        val user = User(
+          id = UUID.randomUUID,
+          firstName = request.firstName,
+          lastName = request.lastName,
+          email = request.email,
+          genre = request.genre
+        )
 
-      credentials = Credentials(
-        userId = user.id,
-        passwordHash = passwordHash
-      )
+        val credentials = Credentials(
+          userId = user.id,
+          passwordHash = PasswordHasher.hash(request.password)
+        )
 
-      savedUser <- userService.create(user)
-      _ <- createCredentials(credentials)
+        userService.create(user).flatMap {
+          case Left(err) => IO.pure(Left(err))
 
-    } yield savedUser
+          case Right(savedUser) =>
+            createCredentials(credentials).map {
+              case Left(err) => Left(err)
+              case Right(_)  => Right(savedUser)
+            }
+        }
+    }
 
-  private def logout(authenticated: Authenticated): Either[UserError, Session] =
-    sessionService.end(authenticated.token).left.map(LogoutError.apply)
+
+  private def logout(authenticated: Authenticated): IO[Either[UserError, Session]] =
+    sessionService.end(authenticated.token).map {
+      case Left(err) => Left(LogoutError(err))
+      case Right(s)  => Right(s)
+    }
+
 
   private def verifyPassword(password: String, hash: String): Either[UserError, Unit] =
     Either.cond(
@@ -61,12 +87,15 @@ class AuthService(
       InvalidCredentials
     )
 
-  private def ensureEmailAvailable(email: String): Either[UserError, Unit] =
-    userService.getByEmail(email) match
+  private def ensureEmailAvailable(email: String): IO[Either[UserError, Unit]] =
+    userService.getByEmail(email).map {
       case Right(_) => Left(UserAlreadyExists)
-      case Left(_) => Right(())
+      case Left(_)  => Right(())
+    }
 
-  private def createCredentials(credentials: Credentials): Either[UserError, Unit] =
-    Right(credentialsRepo.save(credentials))
+
+  private def createCredentials(credentials: Credentials): IO[Either[UserError, Unit]] =
+    credentialsRepo.save(credentials).map(_ => Right(()))
+
 
 }
