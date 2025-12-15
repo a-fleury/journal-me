@@ -20,10 +20,12 @@ object Database:
   
   private val postgresPassword: String = Env.getString("POSTGRES_PASSWORD").getOrElse("pwd")
 
+  private val postgresPort: String = Env.getString("POSTGRES_PORT").getOrElse("5432")
+
   def transactor: Resource[IO, HikariTransactor[IO]] =
     HikariTransactor.newHikariTransactor[IO](
       driverClassName = "org.postgresql.Driver",
-      url = "jdbc:postgresql://localhost:5432/journalme",
+      url = s"jdbc:postgresql://localhost:${postgresPort}/journalme",
       user = postgresUser,
       pass = postgresPassword,
       connectEC = ExecutionContext.global,
